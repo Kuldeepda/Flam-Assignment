@@ -1,0 +1,8 @@
+{
+  "max_retries": 2,
+  "backoff_base": 1,
+  "storage_file": "queue.json",
+  "lock_file": "queue.lock",
+  "worker_heartbeat_seconds": 10,
+  "worker_timeout_seconds": 30
+}

@@ -1,9 +1,5 @@
 # `queuectl` - A CLI-based Background Job Queue
 
-`queuectl` is a minimal, production-grade background job queue system built in Python. It manages background jobs with worker processes, handles automatic retries with exponential backoff, and maintains a Dead Letter Queue (DLQ) for permanently failed jobs.
-
-This project was built as part of the Backend Developer Internship Assignment.
-
 **Demo:** [Link to your CLI demo video on Google Drive/YouTube]
 
 ## Features
@@ -23,7 +19,7 @@ This project was built as part of the Backend Developer Internship Assignment.
 - **Persistence:** JSON
 - **Concurrency:** `multiprocessing` module and `filelock` library
 
-## Setup & Installation
+## Setup & Installation (Windows)
 
 1.  **Clone the repository:**
 
@@ -32,34 +28,33 @@ This project was built as part of the Backend Developer Internship Assignment.
     cd queuectl
     ```
 
-2.  **Create a virtual environment (Recommended):**
+2.  **Create a virtual environment:**
 
     ```bash
-    python3 -m venv venv
-    source venv/bin/activate
+    py -m venv venv
     ```
 
-3.  **Install dependencies:**
+3.  **Activate the virtual environment:**
+
+    ```bash
+    .\venv\Scripts\activate
+    ```
+
+4.  **Install dependencies:**
 
     ```bash
     pip install "typer[all]" rich filelock
     ```
 
-4.  **Make the CLI executable:**
-
-    ```bash
-    chmod +x queuectl.py
-    ```
-
 5.  **Initialize the storage:**
     (This happens automatically the first time you run any command)
     ```bash
-    ./queuectl.py status
+    py queuectl.py status
     ```
 
-## Usage Examples
+## Usage Examples (Windows)
 
-Your main executable is `./queuectl.py`.
+Your main executable is `py queuectl.py`.
 
 ### 1. Enqueue a Job
 
@@ -67,13 +62,13 @@ Add a new job to the queue.
 
 ```bash
 # Add a simple job
-./queuectl.py enqueue "echo 'Hello from the queue'"
+py queuectl.py enqueue "echo 'Hello from the queue'"
 
 # Add a job that will fail
-./queuectl.py enqueue "false"
+py queuectl.py enqueue "thiscommandwillfail"
 
 # Add a job and override its retries
-./queuectl.py enqueue "sleep 5" --max-retries 5
+py queuectl.py enqueue "timeout 5" --max-retries 5
 ```
 
 ### 2. Start Workers
@@ -82,10 +77,10 @@ Run worker processes to execute pending jobs.
 
 ```bash
 # Start a single worker
-./queuectl.py worker start
+py queuectl.py worker start
 
 # Start 4 workers in parallel
-./queuectl.py worker start --count 4
+py queuectl.py worker start --count 4
 ```
 
 Press `CTRL+C` for a graceful shutdown.
@@ -95,7 +90,7 @@ Press `CTRL+C` for a graceful shutdown.
 Get a summary of all jobs by state.
 
 ```bash
-./queuectl.py status
+py queuectl.py status
 
 # Example Output:
 # --- Job Status Summary ---
@@ -117,13 +112,13 @@ List all jobs in a specific state.
 
 ```bash
 # List all pending jobs (default)
-./queuectl.py list
+py queuectl.py list
 
 # List all completed jobs
-./queuectl.py list --state completed
+py queuectl.py list --state completed
 
 # List all permanently failed jobs
-./queuectl.py list --state dead
+py queuectl.py list --state dead
 ```
 
 ### 5. Configure Settings
@@ -131,23 +126,20 @@ List all jobs in a specific state.
 Change system behavior, like retry counts.
 
 ```bash
-# See current config (by opening config.json)
-cat config.json
-
 # Set max retries to 5
-./queuectl.py config set max-retries 5
+py queuectl.py config set max_retries 5
 
 # Set backoff base to 3 (delay = 3^attempts)
-./queuectl.py config set backoff_base 3
+py queuectl.py config set backoff_base 3
 ```
 
 ## Architecture Overview
 
 ### Job Lifecycle
 
-1.  **Enqueue:** A job is added via `queuectl enqueue`. It's locked, appended to the `jobs` list in `queue.json`, and saved.
+1.  **Enqueue:** A job is added via `py queuectl.py enqueue`. It's locked, appended to the `jobs` list in `queue.json`, and saved.
 2.  **Processing:** A worker process calls `storage.get_next_job_for_worker()`. This function _atomically_ (using a file lock) reads `queue.json`, finds the first available job, updates its state to `processing`, and saves the file. This prevents any other worker from grabbing the same job.
-3.  **Execution:** The worker executes the job's command using `subprocess.run()`.
+3.  **Execution:** The worker executes the job's command using `subprocess.run()` with `shell=True`.
 4.  **Success:** If the command exits with code `0`, the job's state is updated to `completed` (again, under a lock).
 5.  **Failure:** If the command exits with a non-zero code or isn't found, `storage.handle_failed_job()` is called.
     - **Retry:** If `attempts < max_retries`, the `attempts` count is increased, the `run_at` timestamp is updated, and the state is set back to `pending`.
@@ -161,38 +153,89 @@ cat config.json
 
 ### Worker Concurrency
 
-- The `queuectl worker start --count N` command uses Python's `multiprocessing` module to spawn `N` independent worker processes.
+- The `py queuectl.py worker start --count N` command uses Python's `multiprocessing` module to spawn `N` independent worker processes.
 - **Race conditions are prevented using a lock file (`queue.lock`)** via the `filelock` library.
 - Before any process reads or writes to `queue.json`, it must acquire this lock. This ensures that only one process can modify the file at a time, preventing data corruption or duplicate job processing.
 - Graceful shutdown is handled by catching `KeyboardInterrupt` (CTRL+C) and signaling all child processes to stop.
 
-## Testing Instructions
+## Testing Instructions (Windows)
 
-A simple validation script is provided to test the core end-to-end flow.
+The most reliable way to test on Windows is to use two Command Prompt windows.
 
-1.  Make the script executable:
-    ```bash
-    chmod +x validate.sh
+### Window 1: CLI Commands
+
+Open your first Command Prompt and navigate to the project folder.
+
+1.  **Clear old files** (It's okay if this gives a "File Not Found" error):
+
+    ```cmd
+    del queue.json queue.lock config.json
     ```
-2.  Run the script:
-    ```bash
-    ./validate.sh
+
+2.  **Set the configuration:**
+
+    ```cmd
+    py queuectl.py config set max_retries 2
+    py queuectl.py config set backoff_base 1
     ```
 
-This script will:
+3.  **Enqueue the test jobs:**
 
-1.  Clear the storage.
-2.  Enqueue one job that succeeds and two that fail.
-3.  Start a worker in the background and let it run for 10 seconds.
-4.  Stop the worker gracefully.
-5.  Check the `status`, `completed`, and `dead` lists to verify the jobs ended in the correct state.
+    ```cmd
+    py queuectl.py enqueue "echo 'Job 1: Success'"
+    py queuectl.py enqueue "thiscommandwillfail"
+    ```
+
+4.  **Check the initial status:**
+    ```cmd
+    py queuectl.py status
+    ```
+    _You should see 2 pending jobs._
+
+### Window 2: Worker
+
+Open a **second** Command Prompt and navigate to the same project folder.
+
+1.  **Activate the virtual environment:**
+    ```cmd
+    .\venv\Scripts\activate
+    ```
+2.  **Start the worker:**
+    ```cmd
+    py queuectl.py worker start
+    ```
+    _You will see the worker start, process "Job 1: Success," and then try (and fail) to run "thiscommandwillfail" twice._
+3.  Wait about 10 seconds, then press **CTRL+C** in this window to stop the worker.
+
+### Back to Window 1: Check Results
+
+1.  **Check the final status:**
+
+    ```cmd
+    py queuectl.py status
+    ```
+
+    _You should see 0 pending, 1 completed, and 1 dead._
+
+2.  **Verify the `completed` list:**
+
+    ```cmd
+    py queuectl.py list --state completed
+    ```
+
+    _You should see "Job 1: Success"._
+
+3.  **Verify the `dead` list:**
+    ```cmd
+    py queuectl.py list --state dead
+    ```
+    _You should see "thiscommandwillfail"._
 
 ## Assumptions & Trade-offs
 
-- **Trade-off (JSON vs. SQLite):** This implementation uses a JSON file, as requested.
+- **Trade-off (JSON vs. SQLite):** This implementation uses a JSON file.
   - **Pro:** The storage is human-readable and requires no external database server.
   - **Con:** This approach is **much slower** and **scales poorly**. Every single operation (enqueue, get job, update job) must lock the _entire_ file, read all data, make one small change, and write all data back.
-  - **Bottleneck:** The file lock becomes a global bottleneck. With many workers, most will be idle waiting for the lock. A database like SQLite handles this much more efficiently with transactions and row-level locking.
+  - **Bottleneck:** The file lock becomes a global bottleneck. With many workers, most will be idle waiting for the lock.
 - **Assumption:** Worker tracking (`queuectl status` for active workers) is not implemented, as it would require a more complex process management system.
 - **Simplification:** Job output (stdout/stderr) is printed by the worker but not stored.
-"# Flam-Assignment" 
