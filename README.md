@@ -160,6 +160,15 @@ py queuectl.py config set backoff_base 3
 
 ## Testing Instructions (Windows)
 
+### Shortcut
+ For windows user
+ ```cmd
+    bash validate.sh
+ ```
+ For linux user 
+  ```cmd
+    chmod +x validate.sh
+ ```
 The most reliable way to test on Windows is to use two Command Prompt windows.
 
 ### Window 1: CLI Commands
