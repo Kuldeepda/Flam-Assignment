@@ -242,9 +242,15 @@ Open a **second** Command Prompt and navigate to the same project folder.
 
 ## Assumptions & Trade-offs
 
-- **Trade-off (JSON vs. SQLite):** This implementation uses a JSON file.
-  - **Pro:** The storage is human-readable and requires no external database server.
-  - **Con:** This approach is **much slower** and **scales poorly**. Every single operation (enqueue, get job, update job) must lock the _entire_ file, read all data, make one small change, and write all data back.
-  - **Bottleneck:** The file lock becomes a global bottleneck. With many workers, most will be idle waiting for the lock.
-- **Assumption:** Worker tracking (`queuectl status` for active workers) is not implemented, as it would require a more complex process management system.
-- **Simplification:** Job output (stdout/stderr) is printed by the worker but not stored.
+### JSON vs. SQLite
+The primary architectural decision was to use a **JSON file** for persistence.
+
+- **Pro:** The `queue.json` file is human-readable, easy to inspect, and requires no external database.
+- **Trade-off:** This approach has a **significant performance bottleneck**.  
+  Every operation (**enqueue**, **get job**, **update job**, **heartbeat**) requires a **global file lock**, which prevents parallel execution.  
+  As the number of workers increases, they will spend most of their time waiting for the lock.  
+  A database like **SQLite** would handle this much more efficiently.
+
+### Job Output
+Job output (**stdout/stderr**) is printed to the console of the worker that ran it,  
+but it is **not captured or stored** in the job’s data file.
